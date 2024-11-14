@@ -27,19 +27,14 @@ function asyncReducer(state, action) {
   }
 }
 
-function useAsync(asyncCallback, initialState, dependencies) {
+function useAsync(initialState) {
   const [state, dispatch] = React.useReducer(asyncReducer, {
     status: 'idle',
     data: null,
     error: null,
     ...initialState,
   })
-
-  React.useEffect(() => {
-    const promise = asyncCallback()
-    if (!promise) {
-      return
-    }
+  const run = React.useCallback(promise => {
     dispatch({type: 'pending'})
     promise.then(
       data => {
@@ -49,27 +44,26 @@ function useAsync(asyncCallback, initialState, dependencies) {
         dispatch({type: 'rejected', error})
       },
     )
-    // too bad the eslint plugin can't statically analyze this :-(
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, dependencies)
+    return
+  }, [])
 
-  return state
+  // too bad the eslint plugin can't statically analyze this :-(
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return {...state, run}
 }
 
 function PokemonInfo({pokemonName}) {
-  const state = useAsync(
-    () => {
-      if (!pokemonName) {
-        return
-      }
-      return fetchPokemon(pokemonName)
-    },
-    {status: pokemonName ? 'pending' : 'idle'},
-    [pokemonName],
-  )
+  const state = useAsync({status: pokemonName ? 'pending' : 'idle'})
 
-  const {data: pokemon, status, error} = state
+  const {data: pokemon, status, error, run} = state
 
+  React.useEffect(() => {
+    if (pokemonName) {
+      return run(fetchPokemon(pokemonName))
+    } else {
+      return
+    }
+  }, [pokemonName, run])
   switch (status) {
     case 'idle':
       return <span>Submit a pokemon</span>
